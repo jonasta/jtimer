@@ -1,0 +1,85 @@
+@page "/configuration"
+@inject TimerPreferences Preferences
+@inject CountdownTimer Timer
+
+<PageTitle>Configuration · jtimer</PageTitle>
+
+<section class="configuration-page">
+    <h1>Configuration</h1>
+
+    <div class="settings-card">
+        <section class="settings-group" aria-labelledby="sound-settings-title">
+            <h2 id="sound-settings-title">Sound</h2>
+
+            <div class="setting-row">
+                <label class="setting-copy" for="sound-enabled">
+                    <span class="setting-title">Chime when time is up</span>
+                    <span class="setting-hint">Plays a chime and vibrates on supported devices.</span>
+                </label>
+                <input id="sound-enabled" type="checkbox" class="setting-switch"
+                       @bind="soundEnabled" @bind:after="SaveSoundAsync" />
+            </div>
+
+            <button type="button" class="settings-button" @onclick="PreviewSoundAsync">Preview sound</button>
+        </section>
+
+        <section class="settings-group" aria-labelledby="alert-settings-title">
+            <h2 id="alert-settings-title">Screen alerts</h2>
+
+            <div class="setting-row">
+                <label class="setting-copy" for="color-alerts-enabled">
+                    <span class="setting-title">Change the screen color near the end</span>
+                    <span class="setting-hint">Yellow for the last 10 seconds, red for 2 seconds at the end.</span>
+                </label>
+                <input id="color-alerts-enabled" type="checkbox" class="setting-switch"
+                       @bind="colorAlertsEnabled" @bind:after="SaveColorAlertsAsync" />
+            </div>
+        </section>
+
+        <section class="settings-group" aria-labelledby="theme-settings-title">
+            <h2 id="theme-settings-title">Theme color</h2>
+
+            <div class="theme-options" role="group" aria-label="Theme color">
+                @foreach (var theme in AppThemes.All)
+                {
+                    <button type="button"
+                            class="theme-option @(theme.Id == selectedTheme ? "is-selected" : null)"
+                            title="@theme.Name"
+                            aria-label="@theme.Name"
+                            aria-pressed="@(theme.Id == selectedTheme ? "true" : "false")"
+                            @onclick="() => SelectThemeAsync(theme.Id)">
+                        <span class="theme-swatch theme-swatch-@theme.Id" aria-hidden="true"></span>
+                    </button>
+                }
+            </div>
+
+            <p class="setting-hint">Changes buttons, icons, and the timer ring.</p>
+        </section>
+    </div>
+</section>
+
+@code {
+    private bool soundEnabled = true;
+    private bool colorAlertsEnabled = true;
+    private string selectedTheme = AppThemes.DefaultId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Preferences.EnsureLoadedAsync();
+        soundEnabled = Preferences.SoundEnabled;
+        colorAlertsEnabled = Preferences.ColorAlertsEnabled;
+        selectedTheme = Preferences.ThemeColor;
+    }
+
+    private Task SaveSoundAsync() => Preferences.SetSoundEnabledAsync(soundEnabled);
+
+    private Task SaveColorAlertsAsync() => Preferences.SetColorAlertsEnabledAsync(colorAlertsEnabled);
+
+    private Task PreviewSoundAsync() => Timer.PreviewAlarmAsync();
+
+    private async Task SelectThemeAsync(string themeId)
+    {
+        selectedTheme = themeId;
+        await Preferences.SetThemeColorAsync(themeId);
+    }
+}

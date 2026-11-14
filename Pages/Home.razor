@@ -1,0 +1,695 @@
+﻿@page "/"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject CountdownTimer Timer
+@inject TimerPreferences Preferences
+@using System.Globalization
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<section class="timer-page">
+    <h1 class="visually-hidden">Countdown timer</h1>
+
+    <div class="timer-card" data-state="@State.ToString().ToLowerInvariant()" data-alert="@AlertTheme">
+        <div class="timer-ring">
+            <svg viewBox="0 0 240 240" aria-hidden="true">
+                <circle class="ring-track" cx="120" cy="120" r="@RingRadius" />
+                <circle class="ring-progress" cx="120" cy="120" r="@RingRadius"
+                        style="stroke-dasharray: @RingDashArray; stroke-dashoffset: @RingDashOffset" />
+            </svg>
+            <div class="ring-content">
+                <div class="time-display" role="timer" aria-live="off">@DisplayTime</div>
+                <p class="status-caption" role="status">@StatusCaption</p>
+            </div>
+        </div>
+
+        <div class="timer-actions">
+            @if (State == CountdownState.Running)
+            {
+                <button type="button" class="timer-button timer-button-primary" @onclick="Pause">Pause</button>
+            }
+            else if (State == CountdownState.Paused)
+            {
+                <button type="button" class="timer-button timer-button-primary" @onclick="ResumeAsync">Resume</button>
+            }
+            else
+            {
+                <button type="button" class="timer-button timer-button-primary" disabled="@(!CanStart)" @onclick="StartAsync">
+                    @(State == CountdownState.Finished ? "Start again" : "Start")
+                </button>
+            }
+
+            <button type="button" class="timer-button timer-button-secondary" disabled="@(State == CountdownState.Idle)" @onclick="ResetAsync">
+                Reset
+            </button>
+        </div>
+
+        <div class="timer-panel">
+            <fieldset class="duration-editor" disabled="@IsBusy">
+                <legend>Duration</legend>
+
+                <div class="duration-fields">
+                    <label class="duration-field">
+                        <span>Hours</span>
+                        <input type="number" min="0" max="23" step="1" inputmode="numeric" aria-label="Hours"
+                               data-select-on-focus
+                               @bind="hours" @bind:event="oninput" @bind:after="ApplyConfiguredDurationAsync" />
+                    </label>
+                    <label class="duration-field">
+                        <span>Minutes</span>
+                        <input type="number" min="0" max="59" step="1" inputmode="numeric" aria-label="Minutes"
+                               data-select-on-focus
+                               @bind="minutes" @bind:event="oninput" @bind:after="ApplyConfiguredDurationAsync" />
+                    </label>
+                    <label class="duration-field">
+                        <span>Seconds</span>
+                        <input type="number" min="0" max="59" step="1" inputmode="numeric" aria-label="Seconds"
+                               data-select-on-focus
+                               @bind="seconds" @bind:event="oninput" @bind:after="ApplyConfiguredDurationAsync" />
+                    </label>
+                </div>
+
+                @if (!CanStart)
+                {
+                    <p class="duration-hint">Set at least one second to start the timer.</p>
+                }
+            </fieldset>
+
+            <div class="preset-list" role="group" aria-label="Quick durations">
+                @foreach (var presetSeconds in presetSecondsList)
+                {
+                    <button type="button"
+                            @key="presetSeconds"
+                            class="preset-button @(IsPresetActive(presetSeconds) ? "is-active" : null)"
+                            disabled="@IsBusy"
+                            title="@($"{FormatPresetLabel(presetSeconds)} — hold or right-click to remove")"
+                            @onclick="() => SelectPresetAsync(presetSeconds)"
+                            @onpointerdown="args => StartPresetPressAsync(presetSeconds, args)"
+                            @onpointerup="CancelPresetPress"
+                            @onpointerleave="CancelPresetPress"
+                            @onpointercancel="CancelPresetPress"
+                            @oncontextmenu="() => RemovePresetAsync(presetSeconds)"
+                            @oncontextmenu:preventDefault>
+                        @FormatPresetLabel(presetSeconds)
+                    </button>
+                }
+
+                <button type="button" class="preset-button preset-button-add" disabled="@IsBusy" @onclick="OpenPresetEditor">
+                    <span aria-hidden="true">+</span> Other
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (isPresetEditorOpen)
+    {
+        <div class="preset-editor-backdrop" @onclick="ClosePresetEditor">
+            <div class="preset-editor"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="preset-editor-title"
+                 @onclick:stopPropagation
+                 @onkeydown="HandlePresetEditorKeyDown">
+                <h2 id="preset-editor-title">Custom preset</h2>
+                <p class="preset-editor-copy">Choose the duration this preset should set.</p>
+
+                <div class="duration-fields">
+                    <label class="duration-field">
+                        <span>Hours</span>
+                        <input type="number" min="0" max="23" step="1" inputmode="numeric" aria-label="Preset hours"
+                               data-select-on-focus @ref="presetHoursInput"
+                               @bind="presetHours" @bind:event="oninput" @bind:after="ValidatePresetDraft" />
+                    </label>
+                    <label class="duration-field">
+                        <span>Minutes</span>
+                        <input type="number" min="0" max="59" step="1" inputmode="numeric" aria-label="Preset minutes"
+                               data-select-on-focus
+                               @bind="presetMinutes" @bind:event="oninput" @bind:after="ValidatePresetDraft" />
+                    </label>
+                    <label class="duration-field">
+                        <span>Seconds</span>
+                        <input type="number" min="0" max="59" step="1" inputmode="numeric" aria-label="Preset seconds"
+                               data-select-on-focus
+                               @bind="presetSeconds" @bind:event="oninput" @bind:after="ValidatePresetDraft" />
+                    </label>
+                </div>
+
+                <p class="preset-draft">@FormatPresetLabel(CustomPresetSeconds)</p>
+
+                @if (PresetDraftError is not null)
+                {
+                    <p class="duration-hint">@PresetDraftError</p>
+                }
+
+                <div class="preset-editor-actions">
+                    <button type="button" class="timer-button timer-button-secondary" @onclick="ClosePresetEditor">Cancel</button>
+                    <button type="button" class="timer-button timer-button-primary" disabled="@(!CanAddPreset)" @onclick="AddPresetAsync">Add preset</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (showPresetToast && removedPresetSeconds is { } removedPreset)
+    {
+        <div class="preset-toast" role="status">
+            <span>Removed @FormatPresetLabel(removedPreset)</span>
+            <button type="button" class="preset-toast-action" @onclick="UndoRemovePresetAsync">Undo</button>
+        </div>
+    }
+</section>
+
+@code {
+    private const int RingRadius = 104;
+    private const int LongPressMilliseconds = 600;
+    private const int PresetToastMilliseconds = 5000;
+    private const int MaxPresetSeconds = (23 * 3600) + (59 * 60) + 59;
+    private const string BaseTitle = "jtimer";
+    private const int WarningThresholdSeconds = 10;
+
+    private static readonly double RingCircumference = 2 * Math.PI * RingRadius;
+    private static readonly int[] DefaultPresetSeconds = [60, 300, 600, 900, 1500, 2700, 3600];
+
+    private IJSObjectReference? uiModule;
+
+    private int hours;
+    private int minutes = 5;
+    private int seconds;
+
+    private List<int> presetSecondsList = [.. DefaultPresetSeconds];
+    private bool isPresetEditorOpen;
+    private bool shouldFocusPresetEditor;
+    private int presetHours;
+    private int presetMinutes = 10;
+    private int presetSeconds;
+    private ElementReference presetHoursInput;
+    private CancellationTokenSource? presetPressCancellation;
+    private int? suppressedPresetSeconds;
+    private int? removedPresetSeconds;
+    private int removedPresetIndex;
+    private bool showPresetToast;
+    private CancellationTokenSource? presetToastCancellation;
+    private bool isDisposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Timer.Changed += OnTimerChanged;
+        await Preferences.EnsureLoadedAsync();
+
+        if (Timer.TotalDuration > TimeSpan.Zero)
+        {
+            ApplyDurationToFields(Timer.TotalDuration);
+        }
+        else
+        {
+            await Timer.SetDurationAsync(ConfiguredDuration);
+        }
+
+        // Load eagerly so the first Start click can unlock audio without waiting.
+        var module = await GetUiModuleAsync();
+        if (module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await module.InvokeVoidAsync("enableSelectOnFocus");
+
+            var storedPresets = await module.InvokeAsync<int[]?>("loadPresets");
+            if (storedPresets is null)
+            {
+                await module.InvokeVoidAsync("savePresets", presetSecondsList.ToArray());
+            }
+            else
+            {
+                presetSecondsList = storedPresets
+                    .Where(presetSeconds => presetSeconds is > 0 and <= MaxPresetSeconds)
+                    .Distinct()
+                    .OrderBy(presetSeconds => presetSeconds)
+                    .ToList();
+            }
+        }
+        catch (JSException)
+        {
+            // Presets still work in memory when storage is unavailable.
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!shouldFocusPresetEditor)
+        {
+            return;
+        }
+
+        shouldFocusPresetEditor = false;
+
+        try
+        {
+            await presetHoursInput.FocusAsync();
+        }
+        catch (JSException)
+        {
+            // Focus is a convenience; the dialog still works without it.
+        }
+    }
+
+    private CountdownState State => Timer.State;
+
+    private TimeSpan Remaining => Timer.Remaining;
+
+    private TimeSpan ConfiguredDuration => new(hours, minutes, seconds);
+
+    private bool IsBusy => Timer.IsBusy;
+
+    private bool CanStart => ConfiguredDuration > TimeSpan.Zero;
+
+    private double RemainingFraction => Timer.RemainingFraction;
+
+    private bool IsNearFinish =>
+        Preferences.ColorAlertsEnabled &&
+        State is CountdownState.Running or CountdownState.Paused &&
+        Remaining > TimeSpan.Zero &&
+        Remaining <= TimeSpan.FromSeconds(WarningThresholdSeconds);
+
+    private string AlertTheme =>
+        !Preferences.ColorAlertsEnabled
+            ? "none"
+            : Timer.ShowFinishedAlert
+                ? "finished"
+                : IsNearFinish
+                    ? "warning"
+                    : "none";
+
+    private string RingDashArray => RingCircumference.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private string RingDashOffset => (RingCircumference * (1 - RemainingFraction)).ToString("0.##", CultureInfo.InvariantCulture);
+
+    private int DisplayTotalSeconds => (int)Math.Ceiling(Remaining.TotalSeconds);
+
+    private string DisplayTime
+    {
+        get
+        {
+            var totalSeconds = DisplayTotalSeconds;
+            var displayHours = totalSeconds / 3600;
+            var displayMinutes = totalSeconds % 3600 / 60;
+            var displaySeconds = totalSeconds % 60;
+
+            return displayHours > 0
+                ? $"{displayHours}:{displayMinutes:00}:{displaySeconds:00}"
+                : $"{displayMinutes:00}:{displaySeconds:00}";
+        }
+    }
+
+    private string StatusCaption => State switch
+    {
+        CountdownState.Running => "Running",
+        CountdownState.Paused => "Paused",
+        CountdownState.Finished => "Time's up",
+        _ => "Ready"
+    };
+
+    private string PageTitleText => State switch
+    {
+        CountdownState.Running => $"{DisplayTime} · {BaseTitle}",
+        CountdownState.Paused => $"Paused · {BaseTitle}",
+        CountdownState.Finished => $"Time's up! · {BaseTitle}",
+        _ => BaseTitle
+    };
+
+    private int CustomPresetSeconds => (presetHours * 3600) + (presetMinutes * 60) + presetSeconds;
+
+    private bool CanAddPreset =>
+        !IsBusy && CustomPresetSeconds > 0 && !presetSecondsList.Contains(CustomPresetSeconds);
+
+    private string? PresetDraftError
+    {
+        get
+        {
+            if (CustomPresetSeconds <= 0)
+            {
+                return "Choose at least one second.";
+            }
+
+            return presetSecondsList.Contains(CustomPresetSeconds)
+                ? "That duration is already a preset."
+                : null;
+        }
+    }
+
+    private bool IsPresetActive(int presetSeconds) =>
+        !IsBusy && ConfiguredDuration.TotalSeconds == presetSeconds;
+
+    private async Task StartAsync()
+    {
+        if (!CanStart)
+        {
+            return;
+        }
+
+        await Timer.StartAsync(ConfiguredDuration);
+    }
+
+    private Task ResumeAsync() => Timer.ResumeAsync();
+
+    private void Pause() => Timer.Pause();
+
+    private Task ResetAsync() => Timer.ResetAsync();
+
+    private async Task ApplyConfiguredDurationAsync()
+    {
+        hours = Math.Clamp(hours, 0, 23);
+        minutes = Math.Clamp(minutes, 0, 59);
+        seconds = Math.Clamp(seconds, 0, 59);
+
+        if (IsBusy)
+        {
+            return;
+        }
+
+        await Timer.SetDurationAsync(ConfiguredDuration);
+    }
+
+    private async Task SelectPresetAsync(int presetSeconds)
+    {
+        // The tap that ends a long press must not also select the preset we just removed.
+        if (suppressedPresetSeconds == presetSeconds)
+        {
+            suppressedPresetSeconds = null;
+            return;
+        }
+
+        if (IsBusy)
+        {
+            return;
+        }
+
+        var duration = TimeSpan.FromSeconds(presetSeconds);
+        ApplyDurationToFields(duration);
+        await Timer.SetDurationAsync(duration);
+    }
+
+    private void ApplyDurationToFields(TimeSpan duration)
+    {
+        hours = (int)duration.TotalHours;
+        minutes = duration.Minutes;
+        seconds = duration.Seconds;
+    }
+
+    private async Task StartPresetPressAsync(int presetSeconds, PointerEventArgs args)
+    {
+        if (IsBusy || args.Button != 0)
+        {
+            return;
+        }
+
+        if (suppressedPresetSeconds == presetSeconds)
+        {
+            suppressedPresetSeconds = null;
+        }
+
+        CancelPresetPress();
+        var cancellation = new CancellationTokenSource();
+        presetPressCancellation = cancellation;
+
+        try
+        {
+            await Task.Delay(LongPressMilliseconds, cancellation.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            if (presetPressCancellation == cancellation)
+            {
+                presetPressCancellation = null;
+            }
+
+            cancellation.Dispose();
+        }
+
+        if (!presetSecondsList.Contains(presetSeconds))
+        {
+            return;
+        }
+
+        // A normal tap still follows; ignore its click after the long-press removal.
+        suppressedPresetSeconds = presetSeconds;
+        await RemovePresetAsync(presetSeconds);
+    }
+
+    private void CancelPresetPress()
+    {
+        presetPressCancellation?.Cancel();
+        presetPressCancellation = null;
+    }
+
+    private async Task RemovePresetAsync(int presetSeconds)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        var index = presetSecondsList.IndexOf(presetSeconds);
+        if (index < 0)
+        {
+            return;
+        }
+
+        presetSecondsList.RemoveAt(index);
+        removedPresetSeconds = presetSeconds;
+        removedPresetIndex = index;
+        showPresetToast = true;
+
+        await InvokeUiModuleAsync("savePresets", presetSecondsList.ToArray());
+        RestartPresetToastTimer();
+    }
+
+    private async Task UndoRemovePresetAsync()
+    {
+        if (removedPresetSeconds is not { } presetSeconds)
+        {
+            return;
+        }
+
+        if (!presetSecondsList.Contains(presetSeconds))
+        {
+            var index = Math.Clamp(removedPresetIndex, 0, presetSecondsList.Count);
+            presetSecondsList.Insert(index, presetSeconds);
+            await InvokeUiModuleAsync("savePresets", presetSecondsList.ToArray());
+        }
+
+        suppressedPresetSeconds = null;
+        DismissPresetToast();
+    }
+
+    private void OpenPresetEditor()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        presetHours = hours;
+        presetMinutes = minutes;
+        presetSeconds = seconds;
+
+        if (CustomPresetSeconds <= 0)
+        {
+            presetMinutes = 10;
+        }
+
+        isPresetEditorOpen = true;
+        shouldFocusPresetEditor = true;
+    }
+
+    private void ClosePresetEditor()
+    {
+        isPresetEditorOpen = false;
+        shouldFocusPresetEditor = false;
+    }
+
+    private void ValidatePresetDraft()
+    {
+        presetHours = Math.Clamp(presetHours, 0, 23);
+        presetMinutes = Math.Clamp(presetMinutes, 0, 59);
+        presetSeconds = Math.Clamp(presetSeconds, 0, 59);
+    }
+
+    private async Task AddPresetAsync()
+    {
+        var totalSeconds = CustomPresetSeconds;
+        if (totalSeconds <= 0 || presetSecondsList.Contains(totalSeconds))
+        {
+            return;
+        }
+
+        presetSecondsList.Add(totalSeconds);
+        presetSecondsList.Sort();
+        suppressedPresetSeconds = null;
+        await InvokeUiModuleAsync("savePresets", presetSecondsList.ToArray());
+        ClosePresetEditor();
+    }
+
+    private void HandlePresetEditorKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            ClosePresetEditor();
+        }
+    }
+
+    private void RestartPresetToastTimer()
+    {
+        presetToastCancellation?.Cancel();
+
+        var cancellation = new CancellationTokenSource();
+        presetToastCancellation = cancellation;
+        _ = HidePresetToastLaterAsync(cancellation);
+    }
+
+    private async Task HidePresetToastLaterAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(PresetToastMilliseconds, cancellation.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            cancellation.Dispose();
+        }
+
+        if (isDisposed || presetToastCancellation != cancellation)
+        {
+            return;
+        }
+
+        presetToastCancellation = null;
+        showPresetToast = false;
+        removedPresetSeconds = null;
+        StateHasChanged();
+    }
+
+    private void DismissPresetToast()
+    {
+        presetToastCancellation?.Cancel();
+        presetToastCancellation = null;
+        showPresetToast = false;
+        removedPresetSeconds = null;
+    }
+
+    private static string FormatPresetLabel(int presetSeconds)
+    {
+        var duration = TimeSpan.FromSeconds(presetSeconds);
+        var presetHours = (int)duration.TotalHours;
+        var presetMinutes = duration.Minutes;
+        var presetRemainderSeconds = duration.Seconds;
+
+        if (presetHours > 0)
+        {
+            if (presetMinutes == 0 && presetRemainderSeconds == 0)
+            {
+                return presetHours == 1 ? "1 hour" : $"{presetHours} hours";
+            }
+
+            if (presetRemainderSeconds == 0)
+            {
+                return $"{presetHours} h {presetMinutes} min";
+            }
+
+            return $"{presetHours} h {presetMinutes} min {presetRemainderSeconds} s";
+        }
+
+        if (presetMinutes > 0)
+        {
+            return presetRemainderSeconds == 0
+                ? $"{presetMinutes} min"
+                : $"{presetMinutes} min {presetRemainderSeconds} s";
+        }
+
+        return $"{presetRemainderSeconds} sec";
+    }
+
+    private void OnTimerChanged()
+    {
+        if (isDisposed)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<IJSObjectReference?> GetUiModuleAsync()
+    {
+        if (uiModule is not null)
+        {
+            return uiModule;
+        }
+
+        try
+        {
+            uiModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/ui.js");
+        }
+        catch (JSException)
+        {
+            return null;
+        }
+        catch (JSDisconnectedException)
+        {
+            return null;
+        }
+
+        return uiModule;
+    }
+
+    private async Task InvokeUiModuleAsync(string identifier, params object?[] arguments)
+    {
+        var module = await GetUiModuleAsync();
+        if (module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await module.InvokeVoidAsync(identifier, arguments);
+        }
+        catch (JSException)
+        {
+            // Preset storage is optional; never let it break the timer.
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser is already gone; nothing left to update.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        isDisposed = true;
+        Timer.Changed -= OnTimerChanged;
+        CancelPresetPress();
+        presetToastCancellation?.Cancel();
+
+        if (uiModule is not null)
+        {
+            try
+            {
+                await uiModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The browser is already gone; nothing left to clean up.
+            }
+        }
+    }
+}

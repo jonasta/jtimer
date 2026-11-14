@@ -1,0 +1,160 @@
+/* Full-viewport shell: content fills the screen above a fixed-height bottom menu. */
+
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.app-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background:
+        radial-gradient(120% 120% at 50% 0%, var(--accent-soft) 0%, transparent 55%),
+        linear-gradient(180deg, #1a2140 0%, #12172c 100%);
+}
+
+.app-nav {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex: 0 0 auto;
+    min-height: var(--app-nav-height);
+    padding: 0.35rem 0.75rem calc(0.35rem + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #0f1426;
+    overflow: hidden;
+}
+
+/* The pill slides between the three items; the icons and labels settle with it. */
+.nav-indicator {
+    position: absolute;
+    top: 0.35rem;
+    bottom: calc(0.35rem + env(safe-area-inset-bottom));
+    left: 0.75rem;
+    width: calc((100% - 1.5rem) / 3);
+    border: 1px solid var(--accent-border);
+    border-radius: 0.9rem;
+    background: linear-gradient(180deg, var(--accent-soft) 0%, var(--accent-faint) 100%);
+    box-shadow:
+        0 0 20px var(--accent-faint),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+    transition: transform 0.45s cubic-bezier(0.34, 1.45, 0.5, 1);
+}
+
+/* NavLink renders the anchor itself, so it needs ::deep to receive the scoped styles. */
+.app-nav ::deep .nav-item {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.35rem;
+    border-radius: 0.9rem;
+    color: rgba(238, 241, 255, 0.62);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.app-nav ::deep .nav-item:hover {
+    color: #ffffff;
+}
+
+.app-nav ::deep .nav-item.active {
+    color: #ffffff;
+}
+
+.app-nav ::deep .nav-item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.nav-icon {
+    width: 1.35rem;
+    height: 1.35rem;
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.72;
+    transition:
+        opacity 0.2s ease,
+        transform 0.25s cubic-bezier(0.34, 1.45, 0.5, 1),
+        filter 0.25s ease;
+}
+
+.nav-item:hover .nav-icon {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.06);
+}
+
+.nav-item.active .nav-icon {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.06);
+    filter: drop-shadow(0 0 7px var(--accent-glow));
+    animation: nav-icon-pop 0.45s cubic-bezier(0.34, 1.45, 0.5, 1);
+}
+
+.nav-label {
+    line-height: 1;
+    transition: transform 0.25s ease;
+}
+
+.nav-item.active .nav-label {
+    transform: translateY(-1px);
+}
+
+@keyframes nav-icon-pop {
+    0% {
+        transform: translateY(0) scale(0.86);
+    }
+
+    60% {
+        transform: translateY(-2px) scale(1.16);
+    }
+
+    100% {
+        transform: translateY(-1px) scale(1.06);
+    }
+}
+
+@media (max-height: 26rem) {
+    .nav-icon {
+        width: 1.2rem;
+        height: 1.2rem;
+    }
+
+    .app-nav ::deep .nav-item {
+        gap: 0.2rem;
+        font-size: 0.68rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-indicator,
+    .nav-icon,
+    .nav-label {
+        transition: none;
+    }
+
+    .app-nav ::deep .nav-item {
+        transition: none;
+    }
+
+    .nav-item.active .nav-icon {
+        animation: none;
+    }
+}

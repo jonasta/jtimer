@@ -1,0 +1,197 @@
+@page "/intervals"
+@implements IDisposable
+@inject IntervalTimer Timer
+
+<PageTitle>Intervals · jtimer</PageTitle>
+
+<section class="interval-page">
+    <div class="interval-card" data-phase="@Timer.Phase.ToString().ToLowerInvariant()">
+        <header class="interval-header">
+            <p class="interval-eyebrow">WORKOUT TIMER</p>
+            <h1>Intervals</h1>
+            <p class="interval-summary">4 rounds · 50 sec exercise · 1 min rest</p>
+        </header>
+
+        <div class="interval-rounds" role="group" aria-label="Round progress">
+            @for (var round = 1; round <= IntervalTimer.TotalRoundsForDisplay; round++)
+            {
+                var currentRound = round;
+                <div class="round-marker @(GetRoundState(currentRound))"
+                     aria-label="Round @currentRound: @GetRoundState(currentRound)">
+                    <span class="round-number">@currentRound</span>
+                    <span class="round-label">ROUND</span>
+                </div>
+            }
+        </div>
+
+        <div class="phase-card">
+            <div class="phase-icon" aria-hidden="true">@PhaseIcon</div>
+            <p class="phase-label" aria-live="polite" aria-atomic="true">@PhaseTitle</p>
+            <div class="interval-ring">
+                <svg class="interval-ring-svg" viewBox="0 0 200 200" aria-hidden="true">
+                    <circle class="interval-ring-track" cx="100" cy="100" r="92" />
+                    <circle class="interval-ring-progress" cx="100" cy="100" r="92"
+                            style="stroke-dasharray: @RingDashArray; stroke-dashoffset: @RingDashOffset" />
+                </svg>
+                <div class="interval-countdown" role="timer" aria-live="off"
+                     aria-label="@PhaseTitle: @DisplayTime remaining">
+                    @DisplayTime
+                </div>
+            </div>
+            <p class="phase-hint">@PhaseHint</p>
+
+            @if (Timer.Phase is not (IntervalPhase.Ready or IntervalPhase.Finished))
+            {
+                <div class="phase-progress" role="progressbar" aria-label="@PhaseTitle progress"
+                     aria-valuemin="0" aria-valuemax="100" aria-valuenow="@ProgressPercent">
+                    <span style="width: @($"{ProgressPercent}%")"></span>
+                </div>
+            }
+        </div>
+
+        @if (Timer.IsRunning && Timer.ScreenWakeLockMessage is { } wakeLockMessage)
+        {
+            <p class="wake-lock-message" role="status">@wakeLockMessage</p>
+        }
+
+        @if (Timer.Phase is not IntervalPhase.Finished)
+        {
+            <div class="next-phase" aria-label="Next interval">
+                <span class="next-phase-label">UP NEXT</span>
+                <span class="next-phase-name">@NextPhaseTitle</span>
+                <span class="next-phase-duration">@NextPhaseDuration</span>
+            </div>
+        }
+        else
+        {
+            <div class="workout-complete" role="status">All 4 rounds complete. Great work!</div>
+        }
+
+        <div class="interval-actions">
+            @if (Timer.IsRunning)
+            {
+                <button type="button" class="interval-button interval-button-primary" @onclick="Timer.PauseAsync">
+                    Pause
+                </button>
+            }
+            else if (Timer.IsPaused)
+            {
+                <button type="button" class="interval-button interval-button-primary" @onclick="Timer.ResumeAsync">
+                    Resume
+                </button>
+            }
+            else
+            {
+                <button type="button" class="interval-button interval-button-primary" @onclick="Timer.StartAsync">
+                    @(Timer.Phase == IntervalPhase.Finished ? "Start again" : "Start workout")
+                </button>
+            }
+
+            <button type="button" class="interval-button interval-button-secondary"
+                    disabled="@(Timer.Phase == IntervalPhase.Ready)" @onclick="Timer.ResetAsync">
+                Reset
+            </button>
+        </div>
+    </div>
+</section>
+
+@code {
+    private const double RingCircumference = 2 * Math.PI * 92;
+
+    private string DisplayTime
+    {
+        get
+        {
+            var totalSeconds = (int)Math.Ceiling(Timer.Remaining.TotalSeconds);
+            return $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
+        }
+    }
+
+    private int ProgressPercent =>
+        Timer.PhaseDuration <= TimeSpan.Zero
+            ? 0
+            : (int)Math.Round((Timer.Remaining / Timer.PhaseDuration) * 100);
+
+    private double RingDashOffset => RingCircumference * (1 - (ProgressPercent / 100d));
+
+    private string RingDashArray => RingCircumference.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string PhaseTitle => Timer.Phase switch
+    {
+        IntervalPhase.Prepare => "Get ready",
+        IntervalPhase.Exercise => "Exercise",
+        IntervalPhase.Rest => "Rest",
+        IntervalPhase.Finished => "Workout complete",
+        _ => "Ready when you are"
+    };
+
+    private string PhaseIcon => Timer.Phase switch
+    {
+        IntervalPhase.Prepare => "◷",
+        IntervalPhase.Exercise => "⚡",
+        IntervalPhase.Rest => "☕",
+        IntervalPhase.Finished => "✓",
+        _ => "⏱"
+    };
+
+    private string PhaseHint => Timer.Phase switch
+    {
+        IntervalPhase.Prepare => "Find your position · exercise starts next",
+        IntervalPhase.Exercise => $"Round {Timer.CurrentRound} of {IntervalTimer.TotalRoundsForDisplay} · keep moving!",
+        IntervalPhase.Rest => $"Recover · round {Timer.CurrentRound + 1} starts next",
+        IntervalPhase.Finished => "You finished every round.",
+        _ => "10 sec prepare · 50 sec exercise · 1 min rest"
+    };
+
+    private string NextPhaseTitle => Timer.Phase switch
+    {
+        IntervalPhase.Ready => "Prepare",
+        IntervalPhase.Prepare => "Exercise",
+        IntervalPhase.Exercise when Timer.CurrentRound < IntervalTimer.TotalRoundsForDisplay => "Rest",
+        IntervalPhase.Exercise => "Finish",
+        IntervalPhase.Rest => "Exercise",
+        _ => string.Empty
+    };
+
+    private string NextPhaseDuration => Timer.Phase switch
+    {
+        IntervalPhase.Ready => "10 sec",
+        IntervalPhase.Prepare => "50 sec",
+        IntervalPhase.Exercise when Timer.CurrentRound < IntervalTimer.TotalRoundsForDisplay => "1 min",
+        IntervalPhase.Rest => "50 sec",
+        _ => ""
+    };
+
+    protected override void OnInitialized()
+    {
+        Timer.Changed += OnTimerChanged;
+    }
+
+    private string GetRoundState(int round)
+    {
+        if (Timer.Phase == IntervalPhase.Finished ||
+            (Timer.Phase == IntervalPhase.Exercise && round < Timer.CurrentRound) ||
+            (Timer.Phase == IntervalPhase.Rest && round <= Timer.CurrentRound))
+        {
+            return "complete";
+        }
+
+        var activeRound = Timer.Phase == IntervalPhase.Rest
+            ? Timer.CurrentRound + 1
+            : Timer.CurrentRound;
+
+        return round == activeRound
+            ? "current"
+            : "upcoming";
+    }
+
+    private void OnTimerChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Timer.Changed -= OnTimerChanged;
+    }
+}

@@ -1,0 +1,79 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<div class="app-shell">
+    <main class="app-main">
+        @Body
+    </main>
+
+    <nav class="app-nav" data-active="@ActiveSection" aria-label="Main navigation"
+         style="grid-template-columns: repeat(3, minmax(0, 1fr))">
+        <span class="nav-indicator" aria-hidden="true"
+              style="width: calc((100% - 1.5rem) / 3); transform: translateX(@ActiveIndicatorOffset%)"></span>
+
+        <NavLink href="/configuration" class="nav-item" Match="NavLinkMatch.All">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 6h8" />
+                <path d="M16 6h4" />
+                <path d="M4 12h2" />
+                <path d="M10 12h10" />
+                <path d="M4 18h8" />
+                <path d="M16 18h4" />
+                <circle cx="14" cy="6" r="2" />
+                <circle cx="8" cy="12" r="2" />
+                <circle cx="14" cy="18" r="2" />
+            </svg>
+            <span class="nav-label">Configuration</span>
+        </NavLink>
+
+        <NavLink href="/intervals" class="nav-item" Match="NavLinkMatch.All">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h6v4H4z" />
+                <path d="M14 7h6v4h-6z" />
+                <path d="M4 15h6v4H4z" />
+                <path d="M14 15h6v4h-6z" />
+            </svg>
+            <span class="nav-label">Intervals</span>
+        </NavLink>
+
+        <NavLink href="/" class="nav-item" Match="NavLinkMatch.All">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="8.5" />
+                <path d="M12 7.5V12l3 2" />
+            </svg>
+            <span class="nav-label">Timer</span>
+        </NavLink>
+    </nav>
+</div>
+
+@code {
+    private string ActiveSection =>
+        Navigation.Uri.Contains("/configuration", StringComparison.OrdinalIgnoreCase)
+            ? "configuration"
+            : Navigation.Uri.Contains("/intervals", StringComparison.OrdinalIgnoreCase)
+                ? "intervals"
+            : "timer";
+
+    private int ActiveIndicatorOffset => ActiveSection switch
+    {
+        "intervals" => 100,
+        "timer" => 200,
+        _ => 0
+    };
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}
