@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("jtimer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+27d15294a8e738dcc405a4091ea7f96dde6fd42b")]
 [assembly: System.Reflection.AssemblyProductAttribute("jtimer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("jtimer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
