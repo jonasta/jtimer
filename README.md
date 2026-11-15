@@ -184,14 +184,18 @@ hosting such as **Azure Static Web Apps**).
 
 ### Azure Static Web Apps
 
-The repository includes an Azure Static Web Apps workflow at
-`.github/workflows/azure-static-web-apps.yml`. To enable it:
+The repository includes the Azure Static Web Apps workflow that Azure generated for the
+`jtimer` resource:
+`.github/workflows/azure-static-web-apps-gentle-bush-01a692610.yml`. Deployments are
+triggered automatically:
 
-1. Create an Azure Static Web App and choose the existing `jonasta/jtimer` GitHub repository.
-2. Add the deployment token provided by Azure as the repository secret
-   `AZURE_STATIC_WEB_APPS_API_TOKEN`.
-3. Push to `master`; the workflow publishes the .NET 8 WebAssembly output from
-   `bin/Release/net8.0/publish/wwwroot`.
+1. The workflow builds the project with Oryx on every push to `master` and uploads
+   `wwwroot`.
+2. Azure stores the deployment token as the repository secret
+   `AZURE_STATIC_WEB_APPS_API_TOKEN_GENTLE_BUSH_01A692610`; the workflow references the same
+   name, so the secret only has to be replaced if the Static Web App is recreated (Azure
+   writes the new workflow and secret for you).
+3. Pull requests get a preview environment; closing the pull request tears it down.
 
 `wwwroot/staticwebapp.config.json` configures navigation fallback to `index.html`, allowing
    direct visits and browser refreshes on client-side routes such as `/configuration` and
