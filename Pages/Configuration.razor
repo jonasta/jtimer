@@ -2,6 +2,9 @@
 @inject TimerPreferences Preferences
 @inject CountdownTimer Timer
 @inject IntervalTimer IntervalWorkout
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+@using System.Text.Json
 
 <PageTitle>Configuration · jtimer</PageTitle>
 
@@ -100,6 +103,21 @@
 
             <p class="setting-hint">Changes buttons, icons, and the timer ring.</p>
         </section>
+
+        <section class="settings-group" aria-labelledby="offline-copy-title">
+            <h2 id="offline-copy-title">Offline copy</h2>
+
+            <p class="setting-hint">@offlineCopyStatus</p>
+            <p class="setting-hint">
+                A hard refresh clears the saved copy and downloads the latest version. Your timer settings,
+                presets, and theme are kept.
+            </p>
+
+            <button type="button" class="settings-button" disabled="@isClearingCache"
+                    @onclick="ClearCacheAndReloadAsync">
+                @(isClearingCache ? "Refreshing…" : "Hard refresh and reload")
+            </button>
+        </section>
     </div>
 </section>
 
@@ -111,6 +129,9 @@
     private int exerciseSeconds = IntervalSettings.Default.ExerciseSeconds;
     private int restSeconds = IntervalSettings.Default.RestSeconds;
     private int rounds = IntervalSettings.Default.Rounds;
+    private IJSObjectReference? pwaModule;
+    private string offlineCopyStatus = "Checking the saved copy…";
+    private bool isClearingCache;
 
     private IntervalSettings EditedSettings =>
         new IntervalSettings(prepareSeconds, exerciseSeconds, restSeconds, rounds).Clamp();
@@ -130,6 +151,115 @@
         exerciseSeconds = Preferences.Intervals.ExerciseSeconds;
         restSeconds = Preferences.Intervals.RestSeconds;
         rounds = Preferences.Intervals.Rounds;
+
+        await LoadOfflineCopyStatusAsync();
+    }
+
+    private async Task LoadOfflineCopyStatusAsync()
+    {
+        var module = await GetPwaModuleAsync();
+        if (module is null)
+        {
+            offlineCopyStatus = "This browser cannot report the saved offline copy.";
+            return;
+        }
+
+        try
+        {
+            var status = await module.InvokeAsync<JsonElement>("getCacheStatus");
+            offlineCopyStatus = DescribeOfflineCopy(status);
+        }
+        catch (JSException)
+        {
+            offlineCopyStatus = "The saved offline copy could not be checked.";
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser is already gone; nothing left to update.
+        }
+    }
+
+    private static string DescribeOfflineCopy(JsonElement status)
+    {
+        if (status.ValueKind != JsonValueKind.Object)
+        {
+            return "The saved offline copy could not be checked.";
+        }
+
+        var supported = status.TryGetProperty("supported", out var supportedValue) && supportedValue.GetBoolean();
+        if (!supported)
+        {
+            return "This browser does not keep an offline copy of jtimer.";
+        }
+
+        var ready = status.TryGetProperty("ready", out var readyValue) && readyValue.GetBoolean();
+        if (!ready)
+        {
+            return "No saved copy yet. Open jtimer once with a connection so it is stored for offline use.";
+        }
+
+        var cachedFileCount = status.TryGetProperty("cachedFileCount", out var countValue) ? countValue.GetInt32() : 0;
+        return $"{cachedFileCount} files are saved on this device, so jtimer opens without a connection.";
+    }
+
+    private async Task<IJSObjectReference?> GetPwaModuleAsync()
+    {
+        if (pwaModule is not null)
+        {
+            return pwaModule;
+        }
+
+        try
+        {
+            pwaModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/pwa.js");
+        }
+        catch (JSException)
+        {
+            return null;
+        }
+        catch (JSDisconnectedException)
+        {
+            return null;
+        }
+
+        return pwaModule;
+    }
+
+    private async Task ClearCacheAndReloadAsync()
+    {
+        if (isClearingCache)
+        {
+            return;
+        }
+
+        var module = await GetPwaModuleAsync();
+        if (module is null)
+        {
+            offlineCopyStatus = "This browser cannot clear the saved offline copy.";
+            return;
+        }
+
+        isClearingCache = true;
+
+        try
+        {
+            // The page reloads inside this call, so it normally never returns.
+            var result = await module.InvokeAsync<string>("clearCacheAndReload");
+            if (result == "offline")
+            {
+                isClearingCache = false;
+                offlineCopyStatus = "Connect to the internet before clearing the saved copy.";
+            }
+        }
+        catch (JSException)
+        {
+            isClearingCache = false;
+            offlineCopyStatus = "The saved offline copy could not be cleared.";
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser is already reloading; nothing left to update.
+        }
     }
 
     private Task SaveSoundAsync() => Preferences.SetSoundEnabledAsync(soundEnabled);
@@ -152,5 +282,22 @@
     {
         selectedTheme = themeId;
         await Preferences.SetThemeColorAsync(themeId);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (pwaModule is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await pwaModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser is already gone; nothing left to clean up.
+        }
     }
 }

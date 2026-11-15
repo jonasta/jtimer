@@ -170,6 +170,16 @@
     background: rgba(255, 255, 255, 0.06);
 }
 
+.settings-button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.settings-button:disabled:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: transparent;
+}
+
 .settings-button:focus-visible,
 .setting-switch:focus-visible,
 .theme-option:focus-visible {

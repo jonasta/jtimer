@@ -42,6 +42,9 @@ is up. The project is rooted at `/Users/jonastasantos/DEV/jtimer`.
   current timings.
 - Installable Progressive Web App (PWA) with a standalone display and offline support for
   the published application shell and its static assets.
+- Configuration shows whether the offline copy is saved on this device, with a **Hard refresh
+  and reload** button that discards the saved copy, re-downloads the latest version, and keeps
+  your timer settings, presets, and theme. The reset is skipped while the device is offline.
 
 > **Note:** This project was created with the .NET SDK installed on this machine (`net8.0`).
 > Newer Blazor/.NET releases exist (for example .NET 10 LTS). To use the latest, install a
@@ -213,14 +216,30 @@ state is kept in the browser, including timer preferences and presets in `localS
 See the [Azure Static Web Apps documentation](https://learn.microsoft.com/azure/static-web-apps/)
 for resource creation, deployment tokens, custom domains, and environment settings.
 
-The published app registers a service worker and caches the Blazor asset manifest's
-integrity-verified static assets for offline startup. Service-worker caching is disabled in
-development to keep local changes visible. Serve the published files over HTTPS (or from
-`localhost`) for service workers and installation to work. The service worker keeps an
-existing app version active until its open clients close, then removes old jtimer caches;
-plan and test deployments with that lifecycle in mind. Offline support applies to the app
-shell and static assets only; it doesn't make the timer continue running while the app is
-closed or guarantee background audio.
+The published app registers a service worker and caches every file listed in the Blazor
+asset manifest, so the whole app — shell, styles, scripts, and .NET runtime files — is
+stored locally on the first online launch. After that, every launch and in-app navigation is
+served from the local cache without contacting the network. The install only activates once
+`index.html` and the Blazor boot files are stored; if they cannot be cached, the worker does
+not activate and the browser retries on the next online visit, so a failed download never
+leaves a worker that cannot open the app. Opening the app offline with no saved copy shows a
+short "no saved copy yet" page instead of a browser error.
+
+A deliberate hard refresh (or the **Hard refresh and reload** button on Configuration)
+discards the saved copy and requests the latest files from the network; the refreshed files
+are stored for the next offline launch. The reset is skipped while the browser is offline, so
+the last usable copy is not lost. Clearing the cache keeps preferences and presets, which
+live in `localStorage`. The rules in `staticwebapp.config.json` mark `index.html` and the
+service worker files `no-cache`, so a new deployment cannot hide behind a stale HTTP-cached
+entry point. Service-worker caching is disabled in development to keep local
+changes visible. Serve the published files over HTTPS (or from `localhost`) for service
+workers and installation to work. A first online visit is always required, including the
+first launch from an iOS Home Screen icon, because iOS keeps separate storage for home-screen
+web apps. The service worker keeps an existing app version active until its open clients
+close, then removes old jtimer caches; plan and test deployments with that lifecycle in mind.
+Offline support applies to the app shell and static assets only; it doesn't make the timer
+continue running while the app is closed or guarantee background audio, and browsers may
+evict stored site data when the device is low on space.
 
 ## Use the latest Blazor version
 
@@ -268,10 +287,18 @@ Standards applied:
   small ES modules under `wwwroot/js/` and are imported where needed; keep them free of
   UI logic.
 - **PWA and offline caching:** Keep install metadata in the standards-based Web App Manifest.
-  Register the worker with `updateViaCache: 'none'`, avoid caching during development, and
-  in published builds cache only the generated Blazor assets manifest entries with their
-  integrity hashes. Treat an offline deployment as a versioned snapshot; don't force
-  immediate worker activation unless the app can safely handle mixed versions.
+  Register the worker with `updateViaCache: 'none'` and avoid caching during development. In
+  published builds, precache every generated Blazor assets manifest entry with its integrity
+  hash, caching each asset independently so one unavailable file cannot abort the install, and
+  activate only once the app shell (`index.html` plus the Blazor boot files) is stored. Serve
+  navigations and static assets cache-first so launches never need the network, cache any
+  additional successful request the app makes, and show a short offline page instead of a
+  browser error when a navigation cannot be served. Let an explicit hard refresh
+  (`request.cache === 'reload'`) try the network first. Treat an offline deployment as a
+  versioned snapshot; don't force immediate worker activation unless the app can safely handle
+  mixed versions. Expose the cached state and a cache reset on Configuration (`wwwroot/js/pwa.js`)
+  rather than hiding recovery behind browser settings, and mark the entry point plus worker
+  files `no-cache` so update checks always reach the server.
 - **iOS safe areas:** Set the document and app-root background to the app shell color so
   the iPhone home-indicator safe area blends with the bottom navigation in standalone mode.
 - **Documentation:** Setup, run, and project standards are documented in this README; new

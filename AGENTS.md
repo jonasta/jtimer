@@ -19,6 +19,14 @@ These rules apply to any AI agent or contributor making changes in this reposito
    - Any coding/formatting/architecture standards applied to this project must be described in `README.md` (see the "Project standards" section).
    - When introducing a new convention or tool (e.g. formatter, analyzer, folder structure rule), update `README.md` accordingly.
 
+## Testing constraints
+
+- **Do not test through the UI.** Agents must not run browser automation, open the app in a
+  browser, take UI screenshots, or drive the page with Chrome DevTools (or any equivalent
+  headless/automated browser tooling).
+- Verify changes with non-UI means instead: `dotnet build`, `dotnet test`, and code review.
+- If UI verification is genuinely required, ask the user to perform it and report back.
+
 ## Project conventions (Blazor/.NET)
 
 - **Language & framework:** C# and Blazor WebAssembly on .NET (target framework defined in `jtimer.csproj`).
