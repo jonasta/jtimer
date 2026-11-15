@@ -21,12 +21,13 @@ is up. The project is rooted at `/Users/jonastasantos/DEV/jtimer`.
   Screen Wake Lock API; releases the lock when paused, reset, or finished.
 - The countdown keeps running while you open the Configuration screen; coming back shows
   the updated time instead of restarting.
-- An **Intervals** workout timer runs 10 seconds of preparation, followed by four 50-second
-  exercise rounds with 1-minute rests between rounds. Phase colors, a circular countdown,
-  a whole-session progress bar with activity segments, round positions, and an up-next cue
-  make transitions clear. A short chime plays at each phase change (respecting the sound
-  setting). It supports pause, resume, and reset, and continues while navigating to another
-  screen.
+- An **Intervals** workout timer runs a configurable prepare phase, then repeated exercise
+  rounds with rests between them. Prepare, exercise, and rest durations (5–600 seconds) and
+  the number of rounds (1–12) are edited on the Configuration screen and remembered. Phase
+  colors, a circular countdown, a whole-session progress bar with activity segments, round
+  positions, and an up-next cue make transitions clear. A short chime plays at each phase
+  change (respecting the sound setting). It supports pause, resume, and reset, and continues
+  while navigating to another screen.
 - A synthesized three-note chime (Web Audio API, no audio files) plus a vibration on
   devices that support it.
 - Tab title shows the remaining time and announces when the timer finishes.
@@ -36,8 +37,9 @@ is up. The project is rooted at `/Users/jonastasantos/DEV/jtimer`.
   sound also has a "Preview sound" button. Both settings are remembered.
 - Theme color picker on Configuration (purple, ocean, teal, green, amber, rose). The choice
   applies immediately and is remembered across reloads.
-- Installable Progressive Web App (PWA) with a standalone display and offline support for
-  the published application shell and its static assets.
+- Prepare, exercise, and rest durations plus the number of rounds are edited on
+  Configuration. Changes apply to the next workout; a running or paused workout keeps its
+  current timings.
 - Installable Progressive Web App (PWA) with a standalone display and offline support for
   the published application shell and its static assets.
 
@@ -124,7 +126,9 @@ server or static host.
 - `Pages/Configuration.razor.css` – scoped styles for the settings page
 - `Services/CountdownTimer.cs` – the singleton countdown that survives screen changes
 - `Services/IntervalTimer.cs` – shared prepare/exercise/rest timer state and phase transitions
-- `Services/TimerPreferences.cs` – persisted sound, color alert, and theme preferences
+- `Services/IntervalSettings.cs` – interval plan (durations and rounds) with allowed ranges
+- `Services/DurationText.cs` – shared formatting for durations shown in the UI
+- `Services/TimerPreferences.cs` – persisted sound, color alert, theme, and interval settings
 - `Services/AppThemes.cs` – the accent palettes offered by the theme picker
 - `wwwroot/js/timer.js` – Web Audio chime, audio unlocking, and tab-title alert helpers
 - `wwwroot/js/ui.js` – timer-screen helpers (preset storage and tap-to-select fields)
@@ -163,8 +167,11 @@ server or static host.
 - The interval workout uses the same audio context, so its phase chimes stay allowed
   even though they fire from the timer loop long after the Start click.
 - Preferences are stored in `localStorage` under `jtimer.soundEnabled`,
-  `jtimer.colorAlertsEnabled` (both default to enabled), and `jtimer.themeColor`
-  (defaults to purple). They are read once at startup through `TimerPreferences`.
+  `jtimer.colorAlertsEnabled` (both default to enabled), `jtimer.themeColor`
+  (defaults to purple), and the interval plan keys
+  `jtimer.interval.prepareSeconds`, `jtimer.interval.exerciseSeconds`,
+  `jtimer.interval.restSeconds`, and `jtimer.interval.rounds`. They are read once at
+  startup through `TimerPreferences`.
 - Theme colors are CSS custom properties on `:root` (`--accent`, `--accent-strong`, and
   derived tints). A `data-theme` attribute selects the palette; `index.html` applies the
   saved value before Blazor starts, so a reload does not flash the default purple.

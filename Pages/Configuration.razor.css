@@ -13,7 +13,9 @@
         max(clamp(1rem, 4vw, 2.5rem), env(safe-area-inset-right))
         clamp(0.75rem, 2vh, 1.5rem)
         max(clamp(1rem, 4vw, 2.5rem), env(safe-area-inset-left));
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     color: #eef1ff;
 }
 
@@ -75,6 +77,78 @@
     margin-top: 0.1rem;
     accent-color: var(--accent);
     cursor: pointer;
+}
+
+.interval-fields {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.interval-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.interval-field-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(238, 241, 255, 0.55);
+}
+
+.interval-field-input {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.7rem;
+    background: rgba(255, 255, 255, 0.05);
+    transition: border-color 0.15s ease;
+}
+
+.interval-field-input:focus-within {
+    border-color: var(--accent);
+}
+
+.interval-field-input input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #eef1ff;
+    font-size: 1.05rem; /* At least 16px, so iOS does not zoom on focus. */
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.interval-field-input input:focus {
+    outline: none;
+}
+
+.interval-field-unit {
+    font-size: 0.72rem;
+    color: rgba(238, 241, 255, 0.55);
+}
+
+/* Narrow phones: keep four fields on one row without clipping their values. */
+@media (max-width: 26rem) {
+    .interval-fields {
+        gap: 0.35rem;
+    }
+
+    .interval-field-input {
+        gap: 0.2rem;
+        padding: 0.35rem 0.35rem;
+    }
+
+    .interval-field-unit {
+        font-size: 0.64rem;
+    }
 }
 
 .settings-button {
@@ -189,6 +263,28 @@
     }
 }
 
+/* Short screens: tighten the spacing so all settings groups stay above the menu. */
+@media (max-height: 46rem) {
+    .configuration-page {
+        gap: 0.6rem;
+        padding-top: max(0.75rem, env(safe-area-inset-top));
+        padding-bottom: 0.6rem;
+    }
+
+    .settings-card {
+        gap: 0.55rem;
+    }
+
+    .settings-group {
+        gap: 0.55rem;
+        padding: 0.7rem 0.9rem;
+    }
+
+    .setting-hint {
+        font-size: 0.75rem;
+    }
+}
+
 /* Short portrait phones: tighten the settings so every group stays above the menu. */
 @media (orientation: portrait) and (max-height: 38rem) {
     .configuration-page {
@@ -221,7 +317,7 @@
 
     .settings-card {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         align-items: start;
         gap: 0.6rem;
     }
@@ -233,6 +329,19 @@
 
     .setting-row {
         gap: 0.6rem;
+    }
+
+    .interval-fields {
+        gap: 0.35rem;
+    }
+
+    .interval-field-input {
+        gap: 0.2rem;
+        padding: 0.35rem 0.4rem;
+    }
+
+    .interval-field-unit {
+        font-size: 0.66rem;
     }
 
     .theme-options {

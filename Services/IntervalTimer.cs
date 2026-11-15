@@ -16,11 +16,6 @@ public enum IntervalPhase
 /// </summary>
 public sealed class IntervalTimer : IAsyncDisposable
 {
-    private static readonly TimeSpan PrepareDuration = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan ExerciseDuration = TimeSpan.FromSeconds(50);
-    private static readonly TimeSpan RestDuration = TimeSpan.FromMinutes(1);
-    public const int TotalRoundsForDisplay = 4;
-    private const int TotalRounds = TotalRoundsForDisplay;
     private const int TickIntervalMilliseconds = 200;
 
     private readonly IJSRuntime js;
@@ -29,13 +24,15 @@ public sealed class IntervalTimer : IAsyncDisposable
     private CancellationTokenSource? runCancellation;
     private IJSObjectReference? timerModule;
     private DateTimeOffset? deadline;
+    private IntervalSettings settings = IntervalSettings.Default;
+    private bool settingsLoaded;
     private bool isDisposed;
 
     public IntervalTimer(IJSRuntime js, TimerPreferences preferences)
     {
         this.js = js;
         this.preferences = preferences;
-        Remaining = PrepareDuration;
+        Remaining = settings.Prepare;
     }
 
     public event Action? Changed;
@@ -46,11 +43,18 @@ public sealed class IntervalTimer : IAsyncDisposable
 
     public TimeSpan Remaining { get; private set; }
 
+    /// <summary>Plan that the current or next workout uses.</summary>
+    public IntervalSettings Settings => settings;
+
+    public int TotalRounds => settings.Rounds;
+
+    public TimeSpan TotalSessionDuration => settings.TotalDuration;
+
     public TimeSpan PhaseDuration => Phase switch
     {
-        IntervalPhase.Prepare => PrepareDuration,
-        IntervalPhase.Exercise => ExerciseDuration,
-        IntervalPhase.Rest => RestDuration,
+        IntervalPhase.Prepare => settings.Prepare,
+        IntervalPhase.Exercise => settings.Exercise,
+        IntervalPhase.Rest => settings.Rest,
         _ => TimeSpan.Zero
     };
 
@@ -59,6 +63,48 @@ public sealed class IntervalTimer : IAsyncDisposable
     public bool IsPaused { get; private set; }
 
     public string? ScreenWakeLockMessage { get; private set; }
+
+    /// <summary>
+    /// Reads the stored interval plan once, so a screen can show it before the first
+    /// workout starts.
+    /// </summary>
+    public async Task EnsureSettingsAsync()
+    {
+        if (settingsLoaded)
+        {
+            return;
+        }
+
+        await preferences.EnsureLoadedAsync();
+        settings = preferences.Intervals.Clamp();
+        settingsLoaded = true;
+
+        if (!IsRunning && !IsPaused)
+        {
+            Remaining = settings.Prepare;
+        }
+    }
+
+    /// <summary>
+    /// Stores edited settings. A workout that is already running or paused keeps its own
+    /// timing; the new values apply when that workout is reset or the next one starts.
+    /// </summary>
+    public async Task ApplySettingsAsync(IntervalSettings updatedSettings)
+    {
+        var clampedSettings = updatedSettings.Clamp();
+        settingsLoaded = true;
+        await preferences.SetIntervalsAsync(clampedSettings);
+
+        if (!IsRunning && !IsPaused)
+        {
+            settings = clampedSettings;
+            Phase = IntervalPhase.Ready;
+            CurrentRound = 1;
+            Remaining = settings.Prepare;
+        }
+
+        Changed?.Invoke();
+    }
 
     public async Task StartAsync()
     {
@@ -72,11 +118,13 @@ public sealed class IntervalTimer : IAsyncDisposable
             Reset();
         }
 
+        await EnsureSettingsAsync();
+        await preferences.EnsureLoadedAsync();
+        settings = preferences.Intervals.Clamp();
         Phase = IntervalPhase.Prepare;
         CurrentRound = 1;
-        Remaining = PrepareDuration;
+        Remaining = settings.Prepare;
         IsPaused = false;
-        await preferences.EnsureLoadedAsync();
         await InvokeTimerModuleAsync("unlockAudio");
         await SetScreenAwakeAsync(true);
         StartRun();
@@ -118,9 +166,11 @@ public sealed class IntervalTimer : IAsyncDisposable
         deadline = null;
         IsRunning = false;
         IsPaused = false;
+        await preferences.EnsureLoadedAsync();
+        settings = preferences.Intervals.Clamp();
         Phase = IntervalPhase.Ready;
         CurrentRound = 1;
-        Remaining = PrepareDuration;
+        Remaining = settings.Prepare;
         await SetScreenAwakeAsync(false);
         Changed?.Invoke();
     }
@@ -134,7 +184,7 @@ public sealed class IntervalTimer : IAsyncDisposable
         IsPaused = false;
         Phase = IntervalPhase.Ready;
         CurrentRound = 1;
-        Remaining = PrepareDuration;
+        Remaining = settings.Prepare;
     }
 
     private void StartRun()
@@ -205,18 +255,18 @@ public sealed class IntervalTimer : IAsyncDisposable
         {
             case IntervalPhase.Prepare:
                 Phase = IntervalPhase.Exercise;
-                Remaining = ExerciseDuration;
+                Remaining = settings.Exercise;
                 return true;
 
-            case IntervalPhase.Exercise when CurrentRound < TotalRounds:
+            case IntervalPhase.Exercise when CurrentRound < settings.Rounds:
                 Phase = IntervalPhase.Rest;
-                Remaining = RestDuration;
+                Remaining = settings.Rest;
                 return true;
 
             case IntervalPhase.Rest:
                 CurrentRound++;
                 Phase = IntervalPhase.Exercise;
-                Remaining = ExerciseDuration;
+                Remaining = settings.Exercise;
                 return true;
 
             case IntervalPhase.Exercise:

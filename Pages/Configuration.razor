@@ -1,6 +1,7 @@
 @page "/configuration"
 @inject TimerPreferences Preferences
 @inject CountdownTimer Timer
+@inject IntervalTimer IntervalWorkout
 
 <PageTitle>Configuration · jtimer</PageTitle>
 
@@ -8,6 +9,50 @@
     <h1 class="screen-title">Configuration</h1>
 
     <div class="settings-card">
+        <section class="settings-group" aria-labelledby="interval-settings-title">
+            <h2 id="interval-settings-title">Interval workout</h2>
+
+            <div class="interval-fields">
+                <label class="interval-field">
+                    <span class="interval-field-label">Prepare</span>
+                    <span class="interval-field-input">
+                        <input type="number" min="@IntervalSettings.MinimumSeconds" max="@IntervalSettings.MaximumSeconds"
+                               step="5" inputmode="numeric" aria-label="Prepare seconds"
+                               @bind="prepareSeconds" @bind:after="SaveIntervalSettingsAsync" />
+                        <span class="interval-field-unit">sec</span>
+                    </span>
+                </label>
+                <label class="interval-field">
+                    <span class="interval-field-label">Exercise</span>
+                    <span class="interval-field-input">
+                        <input type="number" min="@IntervalSettings.MinimumSeconds" max="@IntervalSettings.MaximumSeconds"
+                               step="5" inputmode="numeric" aria-label="Exercise seconds"
+                               @bind="exerciseSeconds" @bind:after="SaveIntervalSettingsAsync" />
+                        <span class="interval-field-unit">sec</span>
+                    </span>
+                </label>
+                <label class="interval-field">
+                    <span class="interval-field-label">Rest</span>
+                    <span class="interval-field-input">
+                        <input type="number" min="@IntervalSettings.MinimumSeconds" max="@IntervalSettings.MaximumSeconds"
+                               step="5" inputmode="numeric" aria-label="Rest seconds"
+                               @bind="restSeconds" @bind:after="SaveIntervalSettingsAsync" />
+                        <span class="interval-field-unit">sec</span>
+                    </span>
+                </label>
+                <label class="interval-field">
+                    <span class="interval-field-label">Rounds</span>
+                    <span class="interval-field-input">
+                        <input type="number" min="@IntervalSettings.MinimumRounds" max="@IntervalSettings.MaximumRounds"
+                               step="1" inputmode="numeric" aria-label="Number of rounds"
+                               @bind="rounds" @bind:after="SaveIntervalSettingsAsync" />
+                    </span>
+                </label>
+            </div>
+
+            <p class="setting-hint">@IntervalSummary</p>
+        </section>
+
         <section class="settings-group" aria-labelledby="sound-settings-title">
             <h2 id="sound-settings-title">Sound</h2>
 
@@ -62,6 +107,18 @@
     private bool soundEnabled = true;
     private bool colorAlertsEnabled = true;
     private string selectedTheme = AppThemes.DefaultId;
+    private int prepareSeconds = IntervalSettings.Default.PrepareSeconds;
+    private int exerciseSeconds = IntervalSettings.Default.ExerciseSeconds;
+    private int restSeconds = IntervalSettings.Default.RestSeconds;
+    private int rounds = IntervalSettings.Default.Rounds;
+
+    private IntervalSettings EditedSettings =>
+        new IntervalSettings(prepareSeconds, exerciseSeconds, restSeconds, rounds).Clamp();
+
+    private string IntervalSummary =>
+        $"{EditedSettings.Rounds} rounds · " +
+        $"{DurationText.FromDuration(EditedSettings.TotalDuration)} total · " +
+        "applies when a workout starts";
 
     protected override async Task OnInitializedAsync()
     {
@@ -69,6 +126,10 @@
         soundEnabled = Preferences.SoundEnabled;
         colorAlertsEnabled = Preferences.ColorAlertsEnabled;
         selectedTheme = Preferences.ThemeColor;
+        prepareSeconds = Preferences.Intervals.PrepareSeconds;
+        exerciseSeconds = Preferences.Intervals.ExerciseSeconds;
+        restSeconds = Preferences.Intervals.RestSeconds;
+        rounds = Preferences.Intervals.Rounds;
     }
 
     private Task SaveSoundAsync() => Preferences.SetSoundEnabledAsync(soundEnabled);
@@ -76,6 +137,16 @@
     private Task SaveColorAlertsAsync() => Preferences.SetColorAlertsEnabledAsync(colorAlertsEnabled);
 
     private Task PreviewSoundAsync() => Timer.PreviewAlarmAsync();
+
+    private async Task SaveIntervalSettingsAsync()
+    {
+        prepareSeconds = Math.Clamp(prepareSeconds, IntervalSettings.MinimumSeconds, IntervalSettings.MaximumSeconds);
+        exerciseSeconds = Math.Clamp(exerciseSeconds, IntervalSettings.MinimumSeconds, IntervalSettings.MaximumSeconds);
+        restSeconds = Math.Clamp(restSeconds, IntervalSettings.MinimumSeconds, IntervalSettings.MaximumSeconds);
+        rounds = Math.Clamp(rounds, IntervalSettings.MinimumRounds, IntervalSettings.MaximumRounds);
+
+        await IntervalWorkout.ApplySettingsAsync(new IntervalSettings(prepareSeconds, exerciseSeconds, restSeconds, rounds));
+    }
 
     private async Task SelectThemeAsync(string themeId)
     {
