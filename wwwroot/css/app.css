@@ -18,6 +18,22 @@
     --palette-green: #6ed47a;
     --palette-amber: #ffbe4f;
     --palette-rose: #ff7aa8;
+
+    /* App background; the intervals screen overrides these per workout step. */
+    --app-main-background:
+        radial-gradient(120% 120% at 50% 0%, var(--accent-soft) 0%, transparent 55%),
+        linear-gradient(180deg, #1a2140 0%, #12172c 100%);
+    --app-nav-background: #0f1426;
+}
+
+/* Shared screen title, so Configuration, Timer, and Intervals read the same. */
+.screen-title {
+    margin: 0;
+    color: var(--screen-title-color, var(--accent));
+    font-size: clamp(0.85rem, 3vw, 1.05rem);
+    font-weight: 750;
+    letter-spacing: 0.19em;
+    text-transform: uppercase;
 }
 
 :root[data-theme="ocean"] {

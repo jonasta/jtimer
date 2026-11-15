@@ -97,6 +97,29 @@ function getAudioContext() {
     return audioContext;
 }
 
+// The interval timer changes phase from the .NET loop, long after the click that
+// started the workout, and iOS Safari refuses a resume that is not inside a real
+// user gesture. Unlocking on the first tap or key press keeps the chime allowed
+// for the whole session.
+const gestureEventNames = ["pointerdown", "keydown", "touchstart"];
+
+function unlockAudioFromGesture() {
+    const context = getAudioContext();
+    context.resume().then(() => {
+        if (context.state === "running") {
+            gestureEventNames.forEach((eventName) => {
+                document.removeEventListener(eventName, unlockAudioFromGesture, true);
+            });
+        }
+    }).catch(() => {
+        // The next gesture tries again.
+    });
+}
+
+gestureEventNames.forEach((eventName) => {
+    document.addEventListener(eventName, unlockAudioFromGesture, true);
+});
+
 // Browsers only allow audio after a user gesture. Call this from a click handler
 // once so the chime can play later, when the countdown finishes.
 // The resume is intentionally not awaited: some browsers keep it pending until a
@@ -130,6 +153,23 @@ function scheduleChime(context, startTime) {
         oscillator.start(noteStart);
         oscillator.stop(noteStart + 0.5);
     });
+}
+
+// A single chime for interval phase changes, shorter than the finished alarm.
+// The resume is intentionally not awaited: a pending resume would block the
+// interval loop that calls this method.
+export function playIntervalChime() {
+    const context = getAudioContext();
+    const play = () => scheduleChime(context, context.currentTime + 0.05);
+
+    if (context.state === "suspended") {
+        context.resume().then(play).catch(() => {
+            // The chime simply stays silent when audio cannot be resumed.
+        });
+        return;
+    }
+
+    play();
 }
 
 export async function playAlarm() {

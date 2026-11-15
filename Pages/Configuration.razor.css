@@ -17,13 +17,6 @@
     color: #eef1ff;
 }
 
-.configuration-page h1 {
-    margin: 0;
-    font-size: clamp(1.4rem, 4.6vw, 1.9rem);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-}
-
 .settings-card {
     display: flex;
     flex-direction: column;

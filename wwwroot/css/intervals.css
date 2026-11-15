@@ -45,7 +45,10 @@
     flex: 0 0 auto;
 }
 
-.interval-eyebrow,
+.interval-header .screen-title {
+    color: var(--phase-color);
+}
+
 .phase-label,
 .next-phase-label {
     margin: 0;
@@ -56,63 +59,10 @@
     text-transform: uppercase;
 }
 
-.interval-header h1 {
-    margin: 0.15rem 0;
-    font-size: clamp(1.3rem, 4.8vw, 1.8rem);
-    font-weight: 750;
-    letter-spacing: -0.04em;
-}
-
 .interval-summary {
     margin: 0;
     color: rgba(238, 241, 255, 0.58);
     font-size: 0.78rem;
-}
-
-.interval-rounds {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: clamp(0.45rem, 2.3vw, 0.9rem);
-    width: min(100%, 23rem);
-}
-
-.round-marker {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    min-height: 2.45rem;
-    padding: 0.35rem 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.8rem;
-    background: rgba(255, 255, 255, 0.035);
-    color: rgba(238, 241, 255, 0.42);
-    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.round-number {
-    font-size: 0.95rem;
-    font-weight: 750;
-    font-variant-numeric: tabular-nums;
-}
-
-.round-label {
-    font-size: 0.56rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-}
-
-.round-marker.current {
-    border-color: color-mix(in srgb, var(--phase-color) 75%, transparent);
-    background: var(--phase-soft);
-    color: var(--phase-color);
-    box-shadow: 0 0 1rem var(--phase-soft);
-}
-
-.round-marker.complete {
-    border-color: rgba(83, 224, 173, 0.28);
-    background: rgba(83, 224, 173, 0.08);
-    color: #53e0ad;
 }
 
 .phase-card {
@@ -122,19 +72,6 @@
     align-items: center;
     gap: clamp(0.25rem, 0.8vh, 0.55rem);
     min-height: 0;
-}
-
-.phase-icon {
-    display: grid;
-    place-items: center;
-    width: clamp(2.4rem, 7vh, 3.25rem);
-    aspect-ratio: 1;
-    border: 1px solid color-mix(in srgb, var(--phase-color) 38%, transparent);
-    border-radius: 50%;
-    background: var(--phase-soft);
-    color: var(--phase-color);
-    font-size: clamp(1.15rem, 4vh, 1.7rem);
-    font-weight: 800;
 }
 
 .interval-ring {
@@ -200,30 +137,94 @@
     font-size: clamp(0.75rem, 2.1vh, 0.9rem);
 }
 
-.wake-lock-message {
+.session-progress {
+    display: flex;
     flex: 0 0 auto;
+    flex-direction: column;
+    gap: 0.35rem;
     width: min(100%, 23rem);
-    margin: 0;
-    color: #ffcf8a;
-    font-size: 0.75rem;
-    line-height: 1.35;
 }
 
-.phase-progress {
-    width: min(70vw, 21rem);
-    height: 0.25rem;
-    overflow: hidden;
+.session-progress-track {
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: clamp(0.9rem, 2.6vh, 1.15rem);
+    overflow: visible;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.1);
 }
 
-.phase-progress span {
-    display: block;
+.session-segment {
     height: 100%;
-    border-radius: inherit;
+    border-right: 2px solid #111628;
+    background: color-mix(in srgb, var(--segment-color, #8f7bff) 26%, transparent);
+    transition: background-color 0.25s ease, filter 0.25s ease;
+}
+
+.session-segment:first-child {
+    border-radius: 999px 0 0 999px;
+}
+
+.session-segment:last-of-type {
+    border-radius: 0 999px 999px 0;
+    border-right: 0;
+}
+
+.session-segment.prepare { --segment-color: #f59e0b; }
+.session-segment.exercise { --segment-color: #16a34a; }
+.session-segment.rest { --segment-color: #2563eb; }
+
+/* Upcoming steps keep only a faint tint and completed steps turn gray, so the
+   single current step is the only one showing its activity color at full strength. */
+.session-segment.complete {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.session-segment.active {
+    background: var(--segment-color, #8f7bff);
+    filter: brightness(1.2) drop-shadow(0 0 0.35rem var(--phase-color));
+}
+
+.session-progress-cursor {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 2px solid #f7f8ff;
+    border-radius: 50%;
     background: var(--phase-color);
-    box-shadow: 0 0 0.65rem var(--phase-color);
-    transition: width 0.2s linear;
+    box-shadow: 0 0 0.5rem var(--phase-color);
+    transform: translate(-50%, -50%);
+    transition: left 0.2s linear;
+}
+
+.session-progress-labels {
+    position: relative;
+    height: 0.9rem;
+    color: rgba(238, 241, 255, 0.5);
+    font-size: 0.62rem;
+    font-weight: 700;
+}
+
+.session-round {
+    position: absolute;
+    transform: translateX(-50%);
+}
+
+.session-round.current {
+    color: var(--phase-color);
+}
+
+.session-round.complete {
+    color: rgba(238, 241, 255, 0.32);
+}
+
+.session-progress-caption {
+    margin: 0;
+    color: rgba(238, 241, 255, 0.58);
+    font-size: 0.7rem;
 }
 
 .next-phase {
@@ -304,6 +305,36 @@
     border-color: rgba(255, 255, 255, 0.17);
     background: transparent;
     color: #eef1ff;
+}
+
+/* The whole app background follows the current interval step. The variables are
+   consumed by the layout shell, so both the content area and the bottom menu tint. */
+body:has(.interval-card[data-phase="prepare"]) {
+    --app-main-background:
+        radial-gradient(120% 120% at 50% 0%, rgba(245, 158, 11, 0.36) 0%, rgba(245, 158, 11, 0) 62%),
+        linear-gradient(180deg, #2a1f0b 0%, #12172c 100%);
+    --app-nav-background: #1c1508;
+}
+
+body:has(.interval-card[data-phase="exercise"]) {
+    --app-main-background:
+        radial-gradient(120% 120% at 50% 0%, rgba(22, 163, 74, 0.36) 0%, rgba(22, 163, 74, 0) 62%),
+        linear-gradient(180deg, #0d2a1b 0%, #101726 100%);
+    --app-nav-background: #0b1d14;
+}
+
+body:has(.interval-card[data-phase="rest"]) {
+    --app-main-background:
+        radial-gradient(120% 120% at 50% 0%, rgba(37, 99, 235, 0.42) 0%, rgba(37, 99, 235, 0) 62%),
+        linear-gradient(180deg, #101e3c 0%, #0f1526 100%);
+    --app-nav-background: #0c1730;
+}
+
+body:has(.interval-card[data-phase="finished"]) {
+    --app-main-background:
+        radial-gradient(120% 120% at 50% 0%, rgba(143, 123, 255, 0.38) 0%, rgba(143, 123, 255, 0) 62%),
+        linear-gradient(180deg, #1d1738 0%, #12172c 100%);
+    --app-nav-background: #151230;
 }
 
 @media (max-height: 38rem) {

@@ -23,8 +23,10 @@ is up. The project is rooted at `/Users/jonastasantos/DEV/jtimer`.
   the updated time instead of restarting.
 - An **Intervals** workout timer runs 10 seconds of preparation, followed by four 50-second
   exercise rounds with 1-minute rests between rounds. Phase colors, a circular countdown,
-  progress bar, round markers, and an up-next cue make transitions clear. It supports pause,
-  resume, and reset, and continues while navigating to another screen.
+  a whole-session progress bar with activity segments, round positions, and an up-next cue
+  make transitions clear. A short chime plays at each phase change (respecting the sound
+  setting). It supports pause, resume, and reset, and continues while navigating to another
+  screen.
 - A synthesized three-note chime (Web Audio API, no audio files) plus a vibration on
   devices that support it.
 - Tab title shows the remaining time and announces when the timer finishes.
@@ -155,8 +157,11 @@ server or static host.
   neither pauses nor resets a running countdown.
 - With screen color alerts enabled, the timer theme turns yellow for the last 10 seconds
   and flashes red for 2 seconds when time is up. The Configuration toggle disables both.
-- Audio is unlocked on the first Start click, as browsers only allow sound after a user
-  gesture.
+- Audio is unlocked on the first tap or key press (`timer.js` listens for a gesture as
+  soon as the page loads), because browsers only allow sound after a real user gesture
+  and iOS Safari refuses a resume that happens later inside a promise chain.
+- The interval workout uses the same audio context, so its phase chimes stay allowed
+  even though they fire from the timer loop long after the Start click.
 - Preferences are stored in `localStorage` under `jtimer.soundEnabled`,
   `jtimer.colorAlertsEnabled` (both default to enabled), and `jtimer.themeColor`
   (defaults to purple). They are read once at startup through `TimerPreferences`.
@@ -176,6 +181,26 @@ dotnet publish -c Release -o publish
 
 Static publish output for standalone WebAssembly: `publish/wwwroot/` (suitable for static
 hosting such as **Azure Static Web Apps**).
+
+### Azure Static Web Apps
+
+The repository includes an Azure Static Web Apps workflow at
+`.github/workflows/azure-static-web-apps.yml`. To enable it:
+
+1. Create an Azure Static Web App and choose the existing `jonasta/jtimer` GitHub repository.
+2. Add the deployment token provided by Azure as the repository secret
+   `AZURE_STATIC_WEB_APPS_API_TOKEN`.
+3. Push to `master`; the workflow publishes the .NET 8 WebAssembly output from
+   `bin/Release/net8.0/publish/wwwroot`.
+
+`wwwroot/staticwebapp.config.json` configures navigation fallback to `index.html`, allowing
+   direct visits and browser refreshes on client-side routes such as `/configuration` and
+   `/intervals`.
+
+The deployment is static-only: this project does not require an API backend. Application
+state is kept in the browser, including timer preferences and presets in `localStorage`.
+See the [Azure Static Web Apps documentation](https://learn.microsoft.com/azure/static-web-apps/)
+for resource creation, deployment tokens, custom domains, and environment settings.
 
 The published app registers a service worker and caches the Blazor asset manifest's
 integrity-verified static assets for offline startup. Service-worker caching is disabled in

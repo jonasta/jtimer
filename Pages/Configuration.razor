@@ -5,7 +5,7 @@
 <PageTitle>Configuration · jtimer</PageTitle>
 
 <section class="configuration-page">
-    <h1>Configuration</h1>
+    <h1 class="screen-title">Configuration</h1>
 
     <div class="settings-card">
         <section class="settings-group" aria-labelledby="sound-settings-title">
@@ -14,7 +14,7 @@
             <div class="setting-row">
                 <label class="setting-copy" for="sound-enabled">
                     <span class="setting-title">Chime when time is up</span>
-                    <span class="setting-hint">Plays a chime and vibrates on supported devices.</span>
+                    <span class="setting-hint">Plays a chime when time is up and at every interval change; vibrates on supported devices.</span>
                 </label>
                 <input id="sound-enabled" type="checkbox" class="setting-switch"
                        @bind="soundEnabled" @bind:after="SaveSoundAsync" />

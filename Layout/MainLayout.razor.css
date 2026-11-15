@@ -15,9 +15,7 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
-    background:
-        radial-gradient(120% 120% at 50% 0%, var(--accent-soft) 0%, transparent 55%),
-        linear-gradient(180deg, #1a2140 0%, #12172c 100%);
+    background: var(--app-main-background);
 }
 
 .app-nav {
@@ -28,7 +26,7 @@
     min-height: var(--app-nav-height);
     padding: 0.35rem 0.75rem calc(0.35rem + env(safe-area-inset-bottom));
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    background: #0f1426;
+    background: var(--app-nav-background);
     overflow: hidden;
 }
 

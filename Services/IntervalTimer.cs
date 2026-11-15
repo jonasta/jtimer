@@ -24,14 +24,17 @@ public sealed class IntervalTimer : IAsyncDisposable
     private const int TickIntervalMilliseconds = 200;
 
     private readonly IJSRuntime js;
+    private readonly TimerPreferences preferences;
+
     private CancellationTokenSource? runCancellation;
     private IJSObjectReference? timerModule;
     private DateTimeOffset? deadline;
     private bool isDisposed;
 
-    public IntervalTimer(IJSRuntime js)
+    public IntervalTimer(IJSRuntime js, TimerPreferences preferences)
     {
         this.js = js;
+        this.preferences = preferences;
         Remaining = PrepareDuration;
     }
 
@@ -73,6 +76,8 @@ public sealed class IntervalTimer : IAsyncDisposable
         CurrentRound = 1;
         Remaining = PrepareDuration;
         IsPaused = false;
+        await preferences.EnsureLoadedAsync();
+        await InvokeTimerModuleAsync("unlockAudio");
         await SetScreenAwakeAsync(true);
         StartRun();
         Changed?.Invoke();
@@ -162,12 +167,14 @@ public sealed class IntervalTimer : IAsyncDisposable
                         IsPaused = false;
                         deadline = null;
                         Changed?.Invoke();
+                        await PlayPhaseChimeAsync();
                         await SetScreenAwakeAsync(false);
                         return;
                     }
 
                     deadline = previousDeadline + Remaining;
                     Changed?.Invoke();
+                    await PlayPhaseChimeAsync();
                     continue;
                 }
 
@@ -235,6 +242,39 @@ public sealed class IntervalTimer : IAsyncDisposable
         Remaining = timeLeft > TimeSpan.Zero
             ? TimeSpan.FromSeconds(Math.Ceiling(timeLeft.TotalSeconds))
             : TimeSpan.Zero;
+    }
+
+    private async Task PlayPhaseChimeAsync()
+    {
+        await preferences.EnsureLoadedAsync();
+        if (!preferences.SoundEnabled)
+        {
+            return;
+        }
+
+        await InvokeTimerModuleAsync("playIntervalChime");
+    }
+
+    private async Task InvokeTimerModuleAsync(string identifier, params object?[] arguments)
+    {
+        var module = await GetTimerModuleAsync();
+        if (module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await module.InvokeVoidAsync(identifier, arguments);
+        }
+        catch (JSException)
+        {
+            // Sound is a nice-to-have; never let it break the timer.
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser is already gone; nothing left to update.
+        }
     }
 
     private async Task SetScreenAwakeAsync(bool shouldStayAwake)

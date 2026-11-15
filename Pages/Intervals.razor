@@ -7,30 +7,16 @@
 <section class="interval-page">
     <div class="interval-card" data-phase="@Timer.Phase.ToString().ToLowerInvariant()">
         <header class="interval-header">
-            <p class="interval-eyebrow">WORKOUT TIMER</p>
-            <h1>Intervals</h1>
+            <h1 class="screen-title">Intervals</h1>
             <p class="interval-summary">4 rounds · 50 sec exercise · 1 min rest</p>
         </header>
 
-        <div class="interval-rounds" role="group" aria-label="Round progress">
-            @for (var round = 1; round <= IntervalTimer.TotalRoundsForDisplay; round++)
-            {
-                var currentRound = round;
-                <div class="round-marker @(GetRoundState(currentRound))"
-                     aria-label="Round @currentRound: @GetRoundState(currentRound)">
-                    <span class="round-number">@currentRound</span>
-                    <span class="round-label">ROUND</span>
-                </div>
-            }
-        </div>
-
         <div class="phase-card">
-            <div class="phase-icon" aria-hidden="true">@PhaseIcon</div>
             <p class="phase-label" aria-live="polite" aria-atomic="true">@PhaseTitle</p>
             <div class="interval-ring">
-                <svg class="interval-ring-svg" viewBox="0 0 200 200" aria-hidden="true">
-                    <circle class="interval-ring-track" cx="100" cy="100" r="92" />
-                    <circle class="interval-ring-progress" cx="100" cy="100" r="92"
+                <svg class="interval-ring-svg" viewBox="0 0 240 240" aria-hidden="true">
+                    <circle class="interval-ring-track" cx="120" cy="120" r="104" />
+                    <circle class="interval-ring-progress" cx="120" cy="120" r="104"
                             style="stroke-dasharray: @RingDashArray; stroke-dashoffset: @RingDashOffset" />
                 </svg>
                 <div class="interval-countdown" role="timer" aria-live="off"
@@ -40,19 +26,29 @@
             </div>
             <p class="phase-hint">@PhaseHint</p>
 
-            @if (Timer.Phase is not (IntervalPhase.Ready or IntervalPhase.Finished))
-            {
-                <div class="phase-progress" role="progressbar" aria-label="@PhaseTitle progress"
-                     aria-valuemin="0" aria-valuemax="100" aria-valuenow="@ProgressPercent">
-                    <span style="width: @($"{ProgressPercent}%")"></span>
-                </div>
-            }
         </div>
 
-        @if (Timer.IsRunning && Timer.ScreenWakeLockMessage is { } wakeLockMessage)
-        {
-            <p class="wake-lock-message" role="status">@wakeLockMessage</p>
-        }
+        <div class="session-progress" role="group" aria-label="Workout session progress">
+            <div class="session-progress-track" role="progressbar" aria-label="Overall workout progress"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="@SessionProgressPercent">
+                @for (var index = 0; index < SessionSegments.Count; index++)
+                {
+                    var segment = SessionSegments[index];
+                    <span class="session-segment @segment.CssClass @GetSegmentState(index)"
+                          style="width: @segment.WidthPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"
+                          title="@segment.Label"></span>
+                }
+                <span class="session-progress-cursor" style="left: @SessionProgressPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></span>
+            </div>
+            <div class="session-progress-labels" aria-hidden="true">
+                @for (var round = 1; round <= IntervalTimer.TotalRoundsForDisplay; round++)
+                {
+                    <span class="session-round @(GetRoundState(round))"
+                          style="left: @RoundLabelPosition(round).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">@round</span>
+                }
+            </div>
+            <p class="session-progress-caption">Round @DisplayedRound of @IntervalTimer.TotalRoundsForDisplay</p>
+        </div>
 
         @if (Timer.Phase is not IntervalPhase.Finished)
         {
@@ -96,7 +92,21 @@
 </section>
 
 @code {
-    private const double RingCircumference = 2 * Math.PI * 92;
+    private const double RingRadius = 104;
+    private const double RingCircumference = 2 * Math.PI * RingRadius;
+    private const double TotalSessionSeconds = 390;
+
+    private static readonly IReadOnlyList<SessionSegment> SessionSegments =
+    [
+        new("Prepare", "prepare", 10),
+        new("Round 1 exercise", "exercise", 50),
+        new("Round 1 rest", "rest", 60),
+        new("Round 2 exercise", "exercise", 50),
+        new("Round 2 rest", "rest", 60),
+        new("Round 3 exercise", "exercise", 50),
+        new("Round 3 rest", "rest", 60),
+        new("Round 4 exercise", "exercise", 50)
+    ];
 
     private string DisplayTime
     {
@@ -107,12 +117,12 @@
         }
     }
 
-    private int ProgressPercent =>
+    private int PhaseProgressPercent =>
         Timer.PhaseDuration <= TimeSpan.Zero
             ? 0
             : (int)Math.Round((Timer.Remaining / Timer.PhaseDuration) * 100);
 
-    private double RingDashOffset => RingCircumference * (1 - (ProgressPercent / 100d));
+    private double RingDashOffset => RingCircumference * (1 - (PhaseProgressPercent / 100d));
 
     private string RingDashArray => RingCircumference.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
@@ -123,15 +133,6 @@
         IntervalPhase.Rest => "Rest",
         IntervalPhase.Finished => "Workout complete",
         _ => "Ready when you are"
-    };
-
-    private string PhaseIcon => Timer.Phase switch
-    {
-        IntervalPhase.Prepare => "◷",
-        IntervalPhase.Exercise => "⚡",
-        IntervalPhase.Rest => "☕",
-        IntervalPhase.Finished => "✓",
-        _ => "⏱"
     };
 
     private string PhaseHint => Timer.Phase switch
@@ -167,6 +168,71 @@
         Timer.Changed += OnTimerChanged;
     }
 
+    private double SessionElapsedSeconds => Timer.Phase switch
+    {
+        IntervalPhase.Ready => 0,
+        IntervalPhase.Prepare => 10 - Timer.Remaining.TotalSeconds,
+        IntervalPhase.Exercise => 10 + ((Timer.CurrentRound - 1) * 110) + 50 - Timer.Remaining.TotalSeconds,
+        IntervalPhase.Rest => 10 + (Timer.CurrentRound * 110) - Timer.Remaining.TotalSeconds,
+        IntervalPhase.Finished => TotalSessionSeconds,
+        _ => 0
+    };
+
+    private double SessionProgressPercent => Math.Clamp(SessionElapsedSeconds / TotalSessionSeconds * 100, 0, 100);
+
+    private int DisplayedRound => Timer.Phase == IntervalPhase.Rest
+        ? Math.Min(Timer.CurrentRound + 1, IntervalTimer.TotalRoundsForDisplay)
+        : Math.Min(Timer.CurrentRound, IntervalTimer.TotalRoundsForDisplay);
+
+    private static double RoundLabelPosition(int round) =>
+        (10 + ((round - 1) * 110) + 55) / TotalSessionSeconds * 100;
+
+    // Exactly one segment is current: the one the session clock sits inside.
+    private int ActiveSegmentIndex
+    {
+        get
+        {
+            if (Timer.Phase == IntervalPhase.Ready)
+            {
+                return -1;
+            }
+
+            if (Timer.Phase == IntervalPhase.Finished)
+            {
+                return SessionSegments.Count;
+            }
+
+            var elapsedSeconds = SessionElapsedSeconds;
+            var accumulatedSeconds = 0d;
+            for (var index = 0; index < SessionSegments.Count; index++)
+            {
+                accumulatedSeconds += SessionSegments[index].DurationSeconds;
+                if (elapsedSeconds < accumulatedSeconds)
+                {
+                    return index;
+                }
+            }
+
+            return SessionSegments.Count;
+        }
+    }
+
+    private string GetSegmentState(int index)
+    {
+        var activeIndex = ActiveSegmentIndex;
+        if (activeIndex < 0)
+        {
+            return "upcoming";
+        }
+
+        if (index == activeIndex)
+        {
+            return "active";
+        }
+
+        return index < activeIndex ? "complete" : "upcoming";
+    }
+
     private string GetRoundState(int round)
     {
         if (Timer.Phase == IntervalPhase.Finished ||
@@ -193,5 +259,10 @@
     public void Dispose()
     {
         Timer.Changed -= OnTimerChanged;
+    }
+
+    private sealed record SessionSegment(string Label, string CssClass, double DurationSeconds)
+    {
+        public double WidthPercent => DurationSeconds / TotalSessionSeconds * 100;
     }
 }
